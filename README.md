@@ -1,99 +1,119 @@
 # Dynamic Campaign Platform
 
+> Serverless, event-driven campaign processing platform on AWS — enabling marketing autonomy, partner integrations, and reward workflows at scale.
+
+---
+
 ## Overview
 
-The **Dynamic Campaign Platform** is a modular, multi-tenant campaign processing system that enables marketing and CRM teams to configure and operate dynamic promotional campaigns without requiring engineering intervention.
+The **Dynamic Campaign Platform** is a modular, multi-tenant system that enables marketing and CRM teams to configure and operate dynamic promotional campaigns **without requiring engineering intervention**.
 
-The platform processes purchase events, applies complex campaign rules, integrates with external partners for reward processing, and orchestrates notification workflows — all using a fully **serverless, event-driven architecture** on AWS.
+The platform was designed after identifying that the legacy campaign process relied heavily on manual engineering effort for every campaign change — creating bottlenecks, silent failures, and limited observability. After investigating the root cause, I redesigned the entire platform using a serverless, event-driven architecture on AWS.
 
-It was designed to handle high transactional volume with strong observability, operational safety, and exceptional cost efficiency.
+The new platform processes purchase events, applies complex campaign rules dynamically, integrates with external reward partners, and orchestrates notification workflows — all with exceptional cost efficiency and full observability.
 
 ---
 
 ## Role & Duration
 
-- **Role:** Cloud Developer / Specialist  
-- **Duration:** 2 months (June-July)  
+| Field | Detail |
+|---|---|
+| **Role** | Cloud Developer / Specialist |
+| **Duration** | 2 months (June – July) |
 
 ---
 
-## Business Context
+## Results & Impact
 
-The business required the ability to run **dynamic promotional campaigns** for mobile application users, segmented by brand and campaign type (e.g. Christmas, Carnival, anniversary, etc.).
+| Metric | Value |
+|---|---|
+| Average monthly infrastructure cost | ~$3.50 |
+| Peak monthly infrastructure cost | ~$5.00 |
+| Average purchase volume | ~150k purchases/month |
+| Engineering involvement for campaign changes | Zero |
+| Observability coverage | End-to-end structured logging + CloudWatch dashboards |
 
-Marketing and CRM teams needed autonomy to configure campaigns, define eligibility rules, integrate with external reward partners, and notify customers — without relying on development teams for manual configuration or code changes.
+- Eliminated manual engineering effort for campaign configuration and changes
+- Gave full autonomy to marketing and CRM teams for campaign lifecycle management
+- Achieved near-zero infrastructure cost with fully serverless, on-demand compute
+- Delivered reliable partner integrations with built-in retry and fault tolerance
+- Established full operational observability with dashboards, alarms, and audit trails
 
 ---
 
 ## Problem Statement
 
-The legacy campaign process suffered from multiple operational limitations:
+The legacy campaign process suffered from critical operational limitations:
 
-- Campaigns required manual engineering effort for setup and changes
-- Limited observability and lack of test environments
-- Silent failures that were difficult to detect and troubleshoot
+- Campaign setup and changes required direct engineering involvement
+- No test environments — changes went straight to production
+- Silent failures with no structured logging or alerting
 - Tight coupling between business logic and deployment cycles
+- Limited ability to scale during peak commercial periods
 
-The business needed a platform that could safely process high volumes of purchases while allowing rapid campaign iteration and partner integration.
-
----
-
-## Goals & Requirements
-
-The platform was designed to:
-
-- Enable **self-service campaign configuration** by CRM and marketing teams
-- Support **multi-tenant** campaigns
-- Process high volumes of purchase events during commercial hours
-- Apply complex campaign rules dynamically
-- Integrate with external reward and campaign partners
-- Provide full observability and safe retry mechanisms
-- Maintain extremely low operational cost
+The business needed a platform that could process high volumes of purchases safely while giving marketing teams the autonomy to configure and iterate campaigns independently.
 
 ---
 
 ## High-Level Architecture
 
-The system follows a **serverless, event-driven architecture**, with clear separation between campaign management, purchase processing, and partner interaction.
+The system follows a **serverless, event-driven architecture** with clear separation between campaign management, purchase processing, and partner interaction.
 
-Core principles:
-- Asynchronous processing using **Amazon SQS**
-- Stateless compute using **AWS Lambda**
-- Configuration-driven business rules
+**Core principles:**
+- Asynchronous processing via **Amazon SQS**
+- Stateless compute via **AWS Lambda**
+- Configuration-driven business rules — no redeployment for campaign changes
 - Tenant isolation via event routing
 - Built-in retries and DLQs for fault tolerance
 
 ### Technology Stack
 
-- **Ingress:** Amazon API Gateway, Amazon SQS  
-- **Compute:** AWS Lambda (AWS Lambda Powertools)  
-- **Messaging:** Amazon SQS (with DLQs)  
-- **Datastores:**  
-  - Amazon DynamoDB (campaign configuration & audit records)  
-  - Amazon S3 (long-term audit storage in compressed Parquet format)  
-- **Observability:** Amazon CloudWatch  
+| Layer | Services |
+|---|---|
+| **Ingress** | Amazon API Gateway, Amazon SQS |
+| **Compute** | AWS Lambda + Lambda Powertools |
+| **Messaging** | Amazon SQS with DLQs |
+| **Datastores** | Amazon DynamoDB, Amazon S3 (Parquet) |
+| **Observability** | Amazon CloudWatch |
 
 ---
 
-## Architecture Overview
+## Architecture Flows
 
-### Campaign Configuration (CRM)
+### 1. Campaign Configuration (CRM)
 
 ![Campaign CRUD Architecture](docs/CRUD.png)
 
-CRM users configure campaigns through a management portal, defining campaign rules, eligibility criteria, partner endpoints, and notification behavior.
+CRM users configure campaigns through a management portal, defining:
+- Campaign validity period and eligibility rules
+- Minimum purchase value and valid purchase types (in-store, e-commerce, or both)
+- Blacklisted and whitelisted items (with bonus value multipliers)
+- Partner endpoints for sale submission and customer authentication
+- Reward types (voucher values, special offers)
+- Campaign-related push notification templates
+
+All rules are stored in DynamoDB and evaluated dynamically at runtime — no code changes required.
 
 ---
 
-### Purchase Processing Flow
+### 2. Purchase Processing Flow
 
 ![Sales Processing Architecture](docs/sales.png)
 
-Purchase events are routed by tenant and processed asynchronously. Campaign rules are applied dynamically based on stored configuration.
+Purchase events are routed by tenant and processed asynchronously through the pipeline:
+
+1. Sales events received via SQS
+2. Events routed by tenant
+3. Campaign configuration loaded from DynamoDB
+4. Purchase value recalculated based on rule sets
+5. Ineligible purchases discarded
+6. Eligible purchases dispatched to partner APIs
+7. Successful dispatches persisted for audit
+8. Failures retried automatically via SQS DLQs
 
 ---
 
-### Customer Authentication Flow
+### 3. Customer Authentication Flow
 
 ![Authentication Architecture](docs/Auth.png)
 
@@ -101,145 +121,84 @@ The mobile application authenticates customers to generate secure, partner-speci
 
 ---
 
-### Reward & Partner Integration Flow
+### 4. Reward & Partner Integration Flow
 
 ![Awards Architecture](docs/Awards.png)
 
-In this flow, the platform **receives reward decisions from external partners**, indicating that a given customer has been awarded a specific benefit (e.g. voucher value or special offer) and communication about.
+The platform receives reward decisions from external partners, indicating that a customer has been awarded a specific benefit (voucher value or special offer), and orchestrates the downstream notification workflow.
 
 ---
 
-### Data Retention & Purge Flow
+### 5. Data Retention & Purge Flow
 
 ![Purge Architecture](docs/Purge.png)
 
-Campaign data is archived after completion and removed from DynamoDB, ensuring both auditability and cost control.
-
----
-
-## Core Domain Logic
-
-### Campaign Configuration
-
-Marketing configures campaigns via CRM with parameters such as:
-- Campaign validity period
-- Minimum purchase value
-- Valid purchase type (in-store, e-commerce, or both)
-- Blacklisted items (excluded from calculation)
-- Whitelisted items (counted with bonus value)
-- Partner endpoints for sale submission
-- Authentication endpoints for customer participation
-- Reward types (voucher values, special offers)
-- Campaign-related push notifications
-
-All rules are stored centrally and evaluated dynamically at runtime.
-
----
-
-### Purchase Processing
-
-1. Sales events are received via SQS
-2. Events are routed by tenant
-3. Campaign configuration is loaded from DynamoDB
-4. Purchase value is recalculated based on rule sets
-5. Ineligible purchases are discarded
-6. Eligible purchases are dispatched to partner APIs
-7. Successful dispatches are persisted for audit purposes
-8. Failures are retried automatically via SQS DLQs
-
----
-
-## External Integrations
-
-- CRM platforms
-- External campaign and reward partners
-- Mobile application clients
-- Voucher and offer providers
-
----
-
-## Data & Persistence Strategy
-
-- **DynamoDB:**  
-  - Campaign configuration  
-  - Partner dispatch records  
-  - Audit and traceability  
-
-- **Amazon S3:**  
-  - Archived campaign data  
-  - Compressed Parquet files for long-term audit and validation  
-
-This strategy balances fast transactional access with cost-efficient long-term storage.
-
----
-
-## Scalability & Load Characteristics
-
-- **Average volume:** ~150k purchases per month
-- Traffic concentrated during commercial hours
-- Tenant-based event routing enables horizontal scalability
-- Serverless compute ensures automatic scale-out without pre-provisioning
-
----
-
-## Cost Efficiency & FinOps
-
-The platform operates with an extremely low and predictable cost profile.
-
-- **Average monthly cost:** ~USD 3.50
-- **Peak monthly cost:** ~USD 5
-- Fully serverless with no idle infrastructure
-
-Below is the real AWS Cost Explorer report for the production environment:
-
-![AWS Cost Explorer – Dynamic Campaign Platform](docs/Costs.png)
+Campaign data is archived to S3 in compressed Parquet format after completion and removed from DynamoDB — ensuring auditability at minimal storage cost.
 
 ---
 
 ## Key Technical Decisions & Trade-offs
 
-- **Serverless-first architecture:**  
-  Eliminated idle resources and aligned costs with real usage.
+| Decision | Rationale | Trade-off |
+|---|---|---|
+| **Serverless-first** | Eliminates idle resources, aligns cost with real usage | Cold start latency on low-traffic periods |
+| **Configuration-driven rules** | Campaign changes without redeployments | Increased validation complexity |
+| **SQS-based orchestration** | Reliability, backpressure, and fault tolerance | Eventual consistency between stages |
+| **Tenant-based event routing** | Clean isolation and horizontal scalability | Additional routing logic complexity |
+| **S3 Parquet archiving** | Low-cost long-term storage with auditability | Requires ETL for direct querying |
 
-- **Configuration-driven business rules:**  
-  Enabled campaign changes without redeployments, at the cost of increased validation complexity.
+---
 
-- **SQS-based orchestration:**  
-  Improved reliability and backpressure handling while introducing eventual consistency.
+## Data & Persistence Strategy
 
-- **Tenant-based event routing:**  
-  Simplified isolation and scalability while increasing routing logic complexity.
+- **DynamoDB** — Campaign configuration, partner dispatch records, audit and traceability (hot data)
+- **Amazon S3 (Parquet)** — Archived campaign data for long-term audit and validation (cold data)
 
-- **Data archiving strategy:**  
-  Reduced DynamoDB storage costs while preserving auditability.
+This hybrid strategy balances fast transactional access with cost-efficient long-term storage.
+
+---
+
+## Scalability & Load Characteristics
+
+- ~150k purchases processed per month
+- Traffic concentrated during commercial hours
+- Tenant-based routing enables horizontal scalability without architectural changes
+- Serverless compute scales automatically — no pre-provisioning required
+
+---
+
+## Cost Efficiency & FinOps
+
+The platform operates with an extremely low and fully predictable cost profile:
+
+| Period | Cost |
+|---|---|
+| Average monthly | ~$3.50 |
+| Peak monthly | ~$5.00 |
+
+Fully serverless — zero idle infrastructure cost.
+
+![AWS Cost Explorer – Dynamic Campaign Platform](docs/Costs.png)
 
 ---
 
 ## Observability & Reliability
 
-- Centralized structured logging
-- CloudWatch dashboards monitoring:
-  - Event throughput
-  - Processing failures
-  - DLQ depth
-- Alarms for:
-  - Dispatch failures
-  - Message backlog
-  - Partner integration issues
+- Centralized structured logging across all Lambda functions
+- CloudWatch dashboards monitoring event throughput, processing failures, and DLQ depth
+- Alarms configured for dispatch failures, message backlog, and partner integration issues
+- End-to-end traceability from purchase ingestion to reward delivery
 
 ---
 
-## Results & Impact
+## External Integrations
 
-- Full autonomy for marketing and CRM teams
-- Elimination of manual campaign configuration by engineering
-- High operational reliability and traceability
-- Extremely low infrastructure cost
-- Modular foundation for future campaign and reward expansion
+- CRM platforms (campaign configuration portal)
+- External campaign and reward partners (voucher and offer providers)
+- Mobile application clients (customer authentication and participation)
 
 ---
 
 ## Disclaimer
 
-All details presented here are anonymized and represent a sanitized version of a real enterprise system.  
-No proprietary data, identifiers, or internal configurations are disclosed.
+All details presented here are anonymized and represent a sanitized version of a real enterprise system. No proprietary data, identifiers, or internal configurations are disclosed.
